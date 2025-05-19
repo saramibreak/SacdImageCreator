@@ -1,0 +1,1 @@
+Linux sony-player 2.6.35 #1 PREEMPT Fri Sep 5 19:57:16 CST 2014 armv6l GNU/Linux
