@@ -39,10 +39,26 @@ int main(int argc, char **argv)
 
 	char insmod_cmd[256] = {};
 	snprintf(insmod_cmd, sizeof(insmod_cmd), "insmod %s/sacd_read.ko minor=201", curdir);
-	if (system(insmod_cmd) != 0) {
-		perror("insmod failed");
+    int status = system(insmod_cmd);
+	if (status == -1) {
+		perror("system");
 		return 1;
 	}
+	else if (WIFEXITED(status)) {
+		int code = WEXITSTATUS(status);
+		if (code == 0) {
+			printf("Module loaded successfully\n");
+		}
+		else {
+			printf("insmod failed with exit code %d\n", code);
+			return 1;
+		}
+	}
+	else if (WIFSIGNALED(status)) {
+		printf("insmod was killed by signal %d\n", WTERMSIG(status));
+		return 1;
+	}
+
 	if (system("mknod -m0666 /dev/sacd_read c 10 201") != 0) {
 		perror("mknod failed");
 		return 1;
@@ -274,6 +290,45 @@ int main(int argc, char **argv)
 	uninit_sacd(fdsacd, &ioctl_buf);
 	close(fdsacd);
 
+    status = system("rmmod sacd_read");
+	if (status == -1) {
+		perror("system");
+		return 1;
+	}
+	else if (WIFEXITED(status)) {
+		int code = WEXITSTATUS(status);
+		if (code == 0) {
+			 printf("Module unloaded successfully\n");
+		}
+		else {
+			 printf("rmmod failed with exit code %d\n", code);
+			return 1;
+		}
+	}
+	else if (WIFSIGNALED(status)) {
+		printf("rmmod was killed by signal %d\n", WTERMSIG(status));
+		return 1;
+	}
+
+    status = system("rm /dev/sacd_read");
+	if (status == -1) {
+		perror("system");
+		return 1;
+	}
+	else if (WIFEXITED(status)) {
+		int code = WEXITSTATUS(status);
+		if (code == 0) {
+			 printf("/dev/sacd_read deleted successfully\n");
+		}
+		else {
+			 printf("rm failed with exit code %d\n", code);
+			return 1;
+		}
+	}
+	else if (WIFSIGNALED(status)) {
+		printf("rm was killed by signal %d\n", WTERMSIG(status));
+		return 1;
+	}
 	char filesystem_new[256] = {};
 	snprintf(filesystem_new, sizeof(filesystem_new), "%s/%s_filesystem.txt", curdir, toc[0].Disc_Catalog_Number);
 	rename(filesystem, filesystem_new);

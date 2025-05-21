@@ -13,10 +13,12 @@
  4. `make`  
 
 ## How to use
- 1. Copy SacdImageCreator file and sacd_read.ko file to AutoScript directory  
- 2. Copy AutoScript directory to USB memory  
- 3. Insert USB memory into the SACD player  
- 4. Run SACD player  
+ 1. Copy SacdImageCreator file and sacd_read.ko file to AutoScript directory.  
+ 2. Copy AutoScript directory to USB memory.  
+ 3. Insert USB memory into the SACD player.  
+ 4. Run SACD player.  
+ 5. After the tray is opened, set the disc. The tray is closed automatically.  
+ 6. Dump is completed, the tray is opened automatically and closed automatically.  
 
 ## Result
  The output files are as follows  
