@@ -14,6 +14,8 @@ endif
 SOURCES_C := \
  main.o \
  filesystem.o \
+ get.o \
+ module.o \
  sacd_read_ioctl.o \
 
 OBJECTS := $(SOURCES_C:.c=.o)

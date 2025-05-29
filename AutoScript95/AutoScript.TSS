@@ -1,0 +1,8 @@
+#MTKAT 0.xx script
+CLI(CLI_drv.sacd.tray 1)
+SLEEPMS(10000)
+CLI(CLI_drv.sacd.tray 0)
+CLI(CLI_app.misc.exec /mnt/sda1/AutoScript/autorip.sh)
+#CLI(CLI_drv.sacd.tray 1)
+#SLEEPMS(10000)
+#CLI(CLI_drv.sacd.tray 0)

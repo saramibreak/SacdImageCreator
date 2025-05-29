@@ -4,7 +4,7 @@
 
 ## Requirement
  1. Toolchain running on ARM processors with mediatek chipset  
- 2. sacd_read.ko, which is embedded to sacd_extract_160  
+ 2. sacd_read.ko, which is embedded to sacd_extract_160, sacd_extract_6200 or sacd_extract_95  
 
 ## How to build
  1. Run host computer  
@@ -29,50 +29,50 @@
  * _sector.txt - byte-formatted file of _filesystem.txt  
 
 ## Supported player
-|player                     |brand           |work             |
-|---------------------------|----------------|-----------------|
-|BDP-S390 / BX39            |Sony            |Not yet confirmed|
-|BDP-S490                   |Sony            |Not yet confirmed|
-|BDP-S495                   |Sony            |Not yet confirmed|
-|BDP-S590 / BX59            |Sony            |Yes              |
-|BDV-E190                   |Sony            |Not yet confirmed|
-|BDV-E290                   |Sony            |Not yet confirmed|
-|BDP-S4100                  |Sony            |Not yet confirmed|
-|BDP-S5100 / BX510          |Sony            |Yes              |
-|BDP-S6200 / BX620          |Sony            |Not yet confirmed|
-|BDP-S7200                  |Sony            |Not yet confirmed|
-|BDP-S790                   |Sony            |Not yet confirmed|
-|BDP-A6000                  |Sony            |Not yet confirmed|
-|BDV-N590                   |Sony            |Not yet confirmed|
-|BDV-NF620                  |Sony            |Not yet confirmed|
-|BDV-NF720                  |Sony            |Not yet confirmed|
-|BDV-N7200                  |Sony            |Not yet confirmed|
-|BDP-S6500                  |Sony            |Not yet confirmed|
-|BDP-80FD                   |Pioneer         |Not yet confirmed|
-|BDP-140                    |Pioneer         |Not yet confirmed|
-|BDP-440                    |Pioneer         |Not yet confirmed|
-|BDP-150                    |Pioneer         |Not yet confirmed|
-|BDP-450                    |Pioneer         |Not yet confirmed|
-|BDP-160                    |Pioneer         |Not yet confirmed|
-|BDP-170                    |Pioneer         |Not yet confirmed|
-|MCS-FS232                  |Pioneer         |Not yet confirmed|
-|BDP-93                     |OPPO            |Not yet confirmed|
-|BDP-95                     |OPPO            |Not yet confirmed|
-|BDP-103 / 103D             |OPPO            |Not yet confirmed|
-|BDP-105 / 105D             |OPPO            |Not yet confirmed|
-|Azur 751BD                 |Cambridge       |Not yet confirmed|
-|Azur 752BD                 |Cambridge       |Not yet confirmed|
-|CXU                        |Cambridge       |Not yet confirmed|
-|FMJ UDP411                 |Arcam           |Not yet confirmed|
-|FMJ CDS27                  |Arcam           |Not yet confirmed|
-|BD32 Mk.II                 |Primare         |Not yet confirmed|
-|EMP 3                      |Electrocompaniet|Not yet confirmed|
-|DBT-1713                   |Denon           |Not yet confirmed|
-|DBT-3313UD / 3313UDCI      |Denon           |Not yet confirmed|
-|Universal Media Transport V|MSB Technology  |Not yet confirmed|
-|Signature UMT V            |MSB Technology  |Not yet confirmed|
-|BD-S677                    |Yamaha          |Not yet confirmed|
-|UD7007                     |Marantz         |Not yet confirmed|
+|player                     |brand           |sacd_read.ko     |work             |
+|---------------------------|----------------|-----------------|-----------------|
+|BDP-S390 / BX39            |Sony            |sacd_extract_160 |Not yet confirmed|
+|BDP-S490                   |Sony            |sacd_extract_160 |Not yet confirmed|
+|BDP-S495                   |Sony            |sacd_extract_160 |Not yet confirmed|
+|BDP-S590 / BX59            |Sony            |sacd_extract_160 |Yes              |
+|BDV-E190                   |Sony            |sacd_extract_160 |Not yet confirmed|
+|BDV-E290                   |Sony            |sacd_extract_160 |Not yet confirmed|
+|BDP-S4100                  |Sony            |sacd_extract_160 |Not yet confirmed|
+|BDP-S5100 / BX510          |Sony            |sacd_extract_160 |Yes              |
+|BDP-S6200 / BX620          |Sony            |sacd_extract_6200|Not yet confirmed|
+|BDP-S7200                  |Sony            |sacd_extract_6200|Not yet confirmed|
+|BDP-S790                   |Sony            |sacd_extract_6200|Not yet confirmed|
+|BDP-A6000                  |Sony            |sacd_extract_6200|Not yet confirmed|
+|BDV-N590                   |Sony            |sacd_extract_6200|Not yet confirmed|
+|BDV-NF620                  |Sony            |sacd_extract_6200|Not yet confirmed|
+|BDV-NF720                  |Sony            |sacd_extract_6200|Not yet confirmed|
+|BDV-N7200                  |Sony            |sacd_extract_6200|Not yet confirmed|
+|BDP-S6500                  |Sony            |sacd_extract_6700|Not yet confirmed|
+|BDP-80FD                   |Pioneer         |sacd_extract_160 |Not yet confirmed|
+|BDP-140                    |Pioneer         |sacd_extract_95  |Not yet confirmed|
+|BDP-440                    |Pioneer         |sacd_extract_95  |Not yet confirmed|
+|BDP-150                    |Pioneer         |sacd_extract_95  |Not yet confirmed|
+|BDP-450                    |Pioneer         |sacd_extract_95  |Not yet confirmed|
+|BDP-160                    |Pioneer         |sacd_extract_160 |Not yet confirmed|
+|BDP-170                    |Pioneer         |sacd_extract_160 |Not yet confirmed|
+|MCS-FS232                  |Pioneer         |sacd_extract_6200|Not yet confirmed|
+|BDP-93                     |OPPO            |sacd_extract_95  |Yes              |
+|BDP-95                     |OPPO            |sacd_extract_95  |Not yet confirmed|
+|BDP-103 / 103D             |OPPO            |sacd_extract_160 |Not yet confirmed|
+|BDP-105 / 105D             |OPPO            |sacd_extract_160 |Not yet confirmed|
+|Azur 751BD                 |Cambridge       |sacd_extract_95  |Not yet confirmed|
+|Azur 752BD                 |Cambridge       |sacd_extract_160 |Not yet confirmed|
+|CXU                        |Cambridge       |sacd_extract_160 |Not yet confirmed|
+|FMJ UDP411                 |Arcam           |sacd_extract_160 |Not yet confirmed|
+|FMJ CDS27                  |Arcam           |sacd_extract_160 |Not yet confirmed|
+|BD32 Mk.II                 |Primare         |sacd_extract_160 |Not yet confirmed|
+|EMP 3                      |Electrocompaniet|sacd_extract_160 |Not yet confirmed|
+|DBT-1713                   |Denon           |sacd_extract_95  |Not yet confirmed|
+|DBT-3313UD / 3313UDCI      |Denon           |sacd_extract_160 |Not yet confirmed|
+|Universal Media Transport V|MSB Technology  |sacd_extract_160 |Not yet confirmed|
+|Signature UMT V            |MSB Technology  |sacd_extract_160 |Not yet confirmed|
+|BD-S677                    |Yamaha          |sacd_extract_160 |Not yet confirmed|
+|UD7007                     |Marantz         |sacd_extract_6200|Not yet confirmed|
 
 ## License
  See LICENSE

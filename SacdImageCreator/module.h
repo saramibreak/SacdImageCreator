@@ -13,21 +13,5 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-typedef struct _TOC {
-	unsigned char Disc_Catalog_Number[16];
-} TOC;
-
-void OutputSACDHeader(
-	FILE* fpHeader,
-	unsigned char* lpBuf,
-	unsigned int* lpSectorNumber,
-	unsigned int* lpEdc,
-	int nLBA
-);
-
-int ReadSACDFileSystem(
-	int fdsacd,
-	FILE* fpLog,
-	FILE* fpSector,
-	TOC* pToc
-);
+int init_module(char* curdir);
+int terminate_module(void);

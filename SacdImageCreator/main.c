@@ -15,70 +15,66 @@
  */
 #include "common.h"
 #include "filesystem.h"
+#include "get.h"
+#include "module.h"
 #include "sacd_read_ioctl.h"
 
-#define MAX_BLOCK_SIZE 254
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 
 int main(int argc, char **argv)
 {
-	if (argc < 2) {
+	if (argc < 3) {
 		perror("argv");
 		return 1;
 	}
 
 	char curdir[256] = {};
-	FILE* fp = popen("pwd", "r");
-	if (fp == NULL) {
-		perror("fp failed");
+	if (get_current_dir(curdir) != 0) {
 		return 1;
 	}
-    if (fgets(curdir, sizeof(curdir), fp)) {
-		curdir[strcspn(curdir, "\n")] = '\0';
-    }
-
-	char insmod_cmd[256] = {};
-	snprintf(insmod_cmd, sizeof(insmod_cmd), "insmod %s/sacd_read.ko minor=201", curdir);
-    int status = system(insmod_cmd);
-	if (status == -1) {
-		perror("system");
-		return 1;
-	}
-	else if (WIFEXITED(status)) {
-		int code = WEXITSTATUS(status);
-		if (code == 0) {
-			printf("Module loaded successfully\n");
-		}
-		else {
-			printf("insmod failed with exit code %d\n", code);
-			return 1;
-		}
-	}
-	else if (WIFSIGNALED(status)) {
-		printf("insmod was killed by signal %d\n", WTERMSIG(status));
+	
+	if (init_module(curdir) != 0) {
 		return 1;
 	}
 
-	if (system("mknod -m0666 /dev/sacd_read c 10 201") != 0) {
-		perror("mknod failed");
+	unsigned long long disc_size = 0;
+	if (get_disc_size(argv[1], &disc_size) != 0) {
+		terminate_module();
 		return 1;
 	}
-#ifdef DEBUG
-	system("ls -lR / &> ls_all_after_insmod.txt");
-	system("lsmod &> lsmod_after_insmod.txt");
-#endif
-	int fd = open(argv[1], O_RDONLY | O_NONBLOCK);
-	if (fd < 0) {
-		perror("argv[1] open failed");
-		return 1;
-	}
+
 	char filesystem[256] = {};
 	snprintf(filesystem, sizeof(filesystem), "%s/filesystem.txt", curdir);
 
 	FILE* fpLog = fopen(filesystem, "w");
 	if (!fpLog) {
 		perror("fpLog failed");
-		close(fd);
+		terminate_module();
+		return 1;
+	}
+	unsigned int all_sector = (unsigned int)(disc_size / DISC_SECTOR_SIZE);
+	fprintf(fpLog, "Disc size: %llu bytes, %u sectors\n", disc_size, all_sector);
+
+	int fdsacd = open("/dev/sacd_read", O_RDONLY);
+	if (fdsacd < 0) {
+		perror("/dev/sacd_read open failed");
+		fclose(fpLog);
+		terminate_module();
+		return 1;
+	}
+	sacd_ioctl_buffer_t ioctl_buf = {0, 0, 0, 0};
+	if (init_sacd(fdsacd, &ioctl_buf) < 0) {
+		perror("init_sacd failed");
+		fclose(fpLog);
+		close(fdsacd);
+		terminate_module();
+		return 1;
+	}
+	if (auth_sacd(fdsacd, &ioctl_buf) < 0) {
+		perror("auth_sacd failed");
+		fclose(fpLog);
+		close(fdsacd);
+		terminate_module();
 		return 1;
 	}
 
@@ -88,56 +84,46 @@ int main(int argc, char **argv)
 	FILE* fpSector = fopen(sector, "w");
 	if (!fpSector) {
 		perror("fpSector failed");
-		close(fd);
 		fclose(fpLog);
+		close(fdsacd);
+		terminate_module();
 		return 1;
 	}
-	unsigned long long disc_size = 0;
-	if (ioctl(fd, BLKGETSIZE64, &disc_size) == -1) {
-		perror("ioctl BLKGETSIZE64 failed");
-		close(fd);
-		fclose(fpLog);
-		fclose(fpSector);
-		return 1;
-    }
-	unsigned int all_sector = (unsigned int)(disc_size / DISC_SECTOR_SIZE);
-	fprintf(fpLog, "Disc size: %llu bytes, %u sectors\n", disc_size, all_sector);
-
 	TOC toc[2];
-	if (ReadSACDFileSystem(fd, fpLog, fpSector, toc) < 0) {
+	if (ReadSACDFileSystem(fdsacd, fpLog, fpSector, toc) < 0) {
 		perror("ReadSACDFileSystem failed");
-		close(fd);
 		fclose(fpLog);
 		fclose(fpSector);
+		close(fdsacd);
+		terminate_module();
         return 1;
 	}
 	fclose(fpLog);
 	fclose(fpSector);
-	close(fd);
 
-	int fdsacd = open("/dev/sacd_read", O_RDONLY);
-	if (fdsacd < 0) {
-		perror("/dev/sacd_read open failed");
-		fclose(fpLog);
-		return 1;
-	}
-	sacd_ioctl_buffer_t ioctl_buf = {0, 0, 0, 0};
-	if (init_sacd(fdsacd, &ioctl_buf) < 0) {
-		perror("init_sacd failed");
-		close(fdsacd);
-		return 1;
-	}
-	if (auth_sacd(fdsacd, &ioctl_buf) < 0) {
-		perror("auth_sacd failed");
-		close(fdsacd);
-		return 1;
-	}
+	char filesystem_new[256] = {};
+	snprintf(filesystem_new, sizeof(filesystem_new), "%s/%s_filesystem.txt", curdir, toc[0].Disc_Catalog_Number);
+	rename(filesystem, filesystem_new);
 
+	char sector_new[256] = {};
+	snprintf(sector_new, sizeof(sector_new), "%s/%s_sector.txt", curdir, toc[0].Disc_Catalog_Number);
+	rename(sector, sector_new);
+
+	char* endptr = NULL;
+	unsigned int MAX_BLOCK_SIZE = strtoul(argv[2], &endptr, 10);
+	if (*endptr) {
+		perror("strtoul failed");
+		close(fdsacd);
+		terminate_module();
+		return 1;
+	}
 	unsigned int block_size = MAX_BLOCK_SIZE;
+
 	void* data_buffer = malloc(block_size * DISC_RAW_SECTOR_SIZE);
 	if (!data_buffer) {
 		perror("malloc failed");
 		close(fdsacd);
+		terminate_module();
 		return 1;
 	}
 	memset(data_buffer, 0, block_size * DISC_RAW_SECTOR_SIZE);
@@ -145,7 +131,9 @@ int main(int argc, char **argv)
 	void* raw_buffer = malloc(block_size * DISC_RAW_SECTOR_SIZE);
 	if (!raw_buffer) {
 		perror("malloc failed");
+		free(data_buffer);
 		close(fdsacd);
+		terminate_module();
 		return 1;
 	}
 	memset(raw_buffer, 0, block_size * DISC_RAW_SECTOR_SIZE);
@@ -153,11 +141,58 @@ int main(int argc, char **argv)
 	void* iso_buffer = malloc(block_size * DISC_RAW_SECTOR_SIZE);
 	if (!iso_buffer) {
 		perror("malloc failed");
+		free(data_buffer);
+		free(raw_buffer);
 		close(fdsacd);
+		terminate_module();
 		return 1;
 	}
 	memset(iso_buffer, 0, block_size * DISC_RAW_SECTOR_SIZE);
 
+	char rawfile[256] = {};
+	snprintf(rawfile, sizeof(rawfile), "%s/%s.raw", curdir, toc[0].Disc_Catalog_Number);
+
+	FILE* fpraw = fopen(rawfile, "wb");
+	if (!fpraw) {
+		perror("fpraw failed");
+		free(data_buffer);
+		free(raw_buffer);
+		free(iso_buffer);
+		close(fdsacd);
+		terminate_module();
+		return 1;
+	}
+
+	char isofile[256] = {};
+	snprintf(isofile, sizeof(isofile), "%s/%s.iso", curdir, toc[0].Disc_Catalog_Number);
+
+	FILE* fpiso = fopen(isofile, "wb");
+	if (!fpiso) {
+		perror("fpiso failed");
+		fclose(fpraw);
+		free(data_buffer);
+		free(raw_buffer);
+		free(iso_buffer);
+		close(fdsacd);
+		terminate_module();
+		return 1;
+	}
+
+	char header[256] = {};
+	snprintf(header, sizeof(header), "%s/%s_header.txt", curdir, toc[0].Disc_Catalog_Number);
+
+	FILE* fpHeader = fopen(header, "w");
+	if (!fpHeader) {
+		perror("fpHeader failed");
+		fclose(fpraw);
+		fclose(fpiso);
+		free(data_buffer);
+		free(raw_buffer);
+		free(iso_buffer);
+		close(fdsacd);
+		terminate_module();
+		return 1;
+	}
 	unsigned int poly = 0x80000011; /* x^32 + x^31 + x^4 + 1 */
 	unsigned int edcLut[UCHAR_MAX + 1] = {};
 	for (unsigned int i = 0; i <= UCHAR_MAX; i++) {
@@ -171,37 +206,6 @@ int main(int argc, char **argv)
 			}
 		}
 		edcLut[i] = edc;
-	}
-	char rawfile[256] = {};
-	snprintf(rawfile, sizeof(rawfile), "%s/%s.raw", curdir, toc[0].Disc_Catalog_Number);
-
-	FILE* fpraw = fopen(rawfile, "wb");
-	if (!fpraw) {
-		perror("fpraw failed");
-		free(data_buffer);
-		close(fdsacd);
-		return 1;
-	}
-
-	char isofile[256] = {};
-	snprintf(isofile, sizeof(isofile), "%s/%s.iso", curdir, toc[0].Disc_Catalog_Number);
-
-	FILE* fpiso = fopen(isofile, "wb");
-	if (!fpiso) {
-		perror("fpiso failed");
-		fclose(fpraw);
-		return 1;
-	}
-
-	char header[256] = {};
-	snprintf(header, sizeof(header), "%s/%s_header.txt", curdir, toc[0].Disc_Catalog_Number);
-
-	FILE* fpHeader = fopen(header, "w");
-	if (!fpHeader) {
-		perror("fpHeader failed");
-		fclose(fpraw);
-		fclose(fpiso);
-		return 1;
 	}
 #ifdef DEBUG
 	all_sector = 896;
@@ -279,63 +283,20 @@ int main(int argc, char **argv)
 		fwrite(iso_buffer, DISC_SECTOR_SIZE, block_size, fpiso);
 		current_lsn += block_size;
 	}
-	free(data_buffer);
 	fclose(fpraw);
 	fclose(fpiso);
 	fclose(fpHeader);
+	free(data_buffer);
+	free(raw_buffer);
+	free(iso_buffer);
+
 	ioctl_buf.param2   = 0;
 	ioctl_buf.param1   = 0;
 	ioctl_buf.count    = 0;
 	ioctl_buf.user_ptr = 0;
 	uninit_sacd(fdsacd, &ioctl_buf);
 	close(fdsacd);
-
-    status = system("rmmod sacd_read");
-	if (status == -1) {
-		perror("system");
-		return 1;
-	}
-	else if (WIFEXITED(status)) {
-		int code = WEXITSTATUS(status);
-		if (code == 0) {
-			 printf("Module unloaded successfully\n");
-		}
-		else {
-			 printf("rmmod failed with exit code %d\n", code);
-			return 1;
-		}
-	}
-	else if (WIFSIGNALED(status)) {
-		printf("rmmod was killed by signal %d\n", WTERMSIG(status));
-		return 1;
-	}
-
-    status = system("rm /dev/sacd_read");
-	if (status == -1) {
-		perror("system");
-		return 1;
-	}
-	else if (WIFEXITED(status)) {
-		int code = WEXITSTATUS(status);
-		if (code == 0) {
-			 printf("/dev/sacd_read deleted successfully\n");
-		}
-		else {
-			 printf("rm failed with exit code %d\n", code);
-			return 1;
-		}
-	}
-	else if (WIFSIGNALED(status)) {
-		printf("rm was killed by signal %d\n", WTERMSIG(status));
-		return 1;
-	}
-	char filesystem_new[256] = {};
-	snprintf(filesystem_new, sizeof(filesystem_new), "%s/%s_filesystem.txt", curdir, toc[0].Disc_Catalog_Number);
-	rename(filesystem, filesystem_new);
-
-	char sector_new[256] = {};
-	snprintf(sector_new, sizeof(sector_new), "%s/%s_sector.txt", curdir, toc[0].Disc_Catalog_Number);
-	rename(sector, sector_new);
+	terminate_module();
 
 	return 0;
 }

@@ -15,6 +15,7 @@
  */
 #include "common.h"
 #include "filesystem.h"
+#include "sacd_read_ioctl.h"
 
 typedef struct _Locale {
 	char Language_Code[2];
@@ -258,32 +259,30 @@ void OutputSACDHeader(
 }
 
 int ReadSACDFileSystem(
-	int fd,
+	int fdsacd,
 	FILE* fpLog,
 	FILE* fpSector,
 	TOC* pToc
 ) {
-	unsigned char* lpBuf = (unsigned char*)malloc(DISC_SECTOR_SIZE * 33);
-	if (!lpBuf) {
+	unsigned char* data_buffer = (unsigned char*)malloc(DISC_SECTOR_SIZE * 33);
+	if (!data_buffer) {
 		perror("malloc failed");
 		return -1;
 	}
 
-	int nLBA = 510;
-	off64_t fdofs = nLBA * DISC_SECTOR_SIZE;
-	off_t result = lseek64(fd, fdofs, SEEK_SET);
-	if (result == -1) {
-		perror("lseek failed (Master TOC)");
+	sacd_ioctl_buffer_t ioctl_buf = {0, 0, 0, 0};
+	ioctl_buf.param2   = 0;
+	ioctl_buf.param1   = 510;
+	ioctl_buf.count    = 1;
+	ioctl_buf.user_ptr = (unsigned int)data_buffer;
+
+	if (read_sacd(fdsacd, &ioctl_buf) < 0) {
+		perror("read_sacd failed");
+		free(data_buffer);
 		return -1;
 	}
-
-	ssize_t bytesRead = read(fd, lpBuf, DISC_SECTOR_SIZE);
-	if (bytesRead == -1) {
-		perror("Read failed (Master TOC)");
-		return -1;
-	}
-
-	OutputMainChannel(fpSector, lpBuf, "Master TOC", nLBA, DISC_SECTOR_SIZE);
+	unsigned char* lpBuf = data_buffer + 12;
+	OutputMainChannel(fpSector, lpBuf, "Master TOC", 510, DISC_SECTOR_SIZE);
 
 	Master_TOC mToc;
 	memcpy(&mToc, lpBuf, sizeof(Master_TOC));
@@ -367,12 +366,19 @@ int ReadSACDFileSystem(
 		);
 	}
 
+	int nLBA;
 	for (nLBA = 511; nLBA <= 518; nLBA++) {
-		bytesRead = read(fd, lpBuf, DISC_SECTOR_SIZE);
-		if (bytesRead == -1) {
-			perror("Read failed (Master_Text)");
+		ioctl_buf.param2   = 0;
+		ioctl_buf.param1   = nLBA;
+		ioctl_buf.count    = 1;
+		ioctl_buf.user_ptr = (unsigned int)data_buffer;
+
+		if (read_sacd(fdsacd, &ioctl_buf) < 0) {
+			perror("read_sacd failed");
+			free(data_buffer);
 			return -1;
 		}
+		lpBuf = data_buffer + 12;
 		OutputMainChannel(fpSector, lpBuf, "Master_Text", nLBA, DISC_SECTOR_SIZE);
 		Master_Text mText;
 		mText.Album_Title_Ptr = MAKEWORD(lpBuf[0x11], lpBuf[0x10]);
@@ -494,14 +500,18 @@ int ReadSACDFileSystem(
 		}
 		fprintf(fpLog, "\n");
 	}
-	nLBA = 519;
-	bytesRead = read(fd, lpBuf, DISC_SECTOR_SIZE);
-	if (bytesRead == -1) {
-		perror("Read failed (Manufacture)");
+	ioctl_buf.param2   = 0;
+	ioctl_buf.param1   = 519;
+	ioctl_buf.count    = 1;
+	ioctl_buf.user_ptr = (unsigned int)data_buffer;
+
+	if (read_sacd(fdsacd, &ioctl_buf) < 0) {
+		perror("read_sacd failed");
+		free(data_buffer);
 		return -1;
 	}
-
-	OutputMainChannel(fpSector, lpBuf, "Manufacture", nLBA, DISC_SECTOR_SIZE);
+	lpBuf = data_buffer + 12;
+	OutputMainChannel(fpSector, lpBuf, "Manufacture", 519, DISC_SECTOR_SIZE);
 	fprintf(fpLog,
 		"Manufacture\n"
 		"\tManuf_Info_Signature: %.8s\n", &lpBuf[0]);
@@ -509,17 +519,17 @@ int ReadSACDFileSystem(
 	unsigned long ulChToc[] = { (unsigned long)mToc.TWOCH_TOC_1_Address , (unsigned long)mToc.MC_TOC_1_Address, 0 };
 	for (unsigned long c = 0; ulChToc[c] != 0; c++) {
 		nLBA = ulChToc[c];
-		fdofs = (off64_t)nLBA * (off64_t)DISC_SECTOR_SIZE;
-		result = lseek64(fd, fdofs, SEEK_SET);
-		if (result == -1) {
-			perror("lseek failed (Area_TOC)");
+		ioctl_buf.param2   = 0;
+		ioctl_buf.param1   = nLBA;
+		ioctl_buf.count    = 1;
+		ioctl_buf.user_ptr = (unsigned int)data_buffer;
+
+		if (read_sacd(fdsacd, &ioctl_buf) < 0) {
+			perror("read_sacd failed");
+			free(data_buffer);
 			return -1;
 		}
-		bytesRead = read(fd, lpBuf, DISC_SECTOR_SIZE);
-		if (bytesRead == -1) {
-			perror("Read failed (Area_TOC)");
-			return -1;
-		}
+		lpBuf = data_buffer + 12;
 		OutputMainChannel(fpSector, lpBuf, "Area_TOC", nLBA, DISC_SECTOR_SIZE);
 
 		Area_TOC aToc;
@@ -631,11 +641,17 @@ int ReadSACDFileSystem(
 		}
 
 		nLBA = ulChToc[c] + 1;
-		bytesRead = read(fd, lpBuf, DISC_SECTOR_SIZE);
-		if (bytesRead == -1) {
-			perror("Read failed (Track_List_1)");
+		ioctl_buf.param2   = 0;
+		ioctl_buf.param1   = nLBA;
+		ioctl_buf.count    = 1;
+		ioctl_buf.user_ptr = (unsigned int)data_buffer;
+
+		if (read_sacd(fdsacd, &ioctl_buf) < 0) {
+			perror("read_sacd failed");
+			free(data_buffer);
 			return -1;
 		}
+		lpBuf = data_buffer + 12;
 		OutputMainChannel(fpSector, lpBuf, "Track_List_1", nLBA, DISC_SECTOR_SIZE);
 
 		Track_List_1 tList1;
@@ -663,12 +679,18 @@ int ReadSACDFileSystem(
 				, i + 1, tList1.Track_Length[i], tList1.Track_Length[i]
 			);
 		}
+
 		nLBA = ulChToc[c] + 2;
-		bytesRead = read(fd, lpBuf, DISC_SECTOR_SIZE);
-		if (bytesRead == -1) {
-			perror("Read failed (Track_List_2)");
+		ioctl_buf.param2   = 0;
+		ioctl_buf.param1   = nLBA;
+		ioctl_buf.count    = 1;
+		ioctl_buf.user_ptr = (unsigned int)data_buffer;
+
+		if (read_sacd(fdsacd, &ioctl_buf) < 0) {
+			perror("read_sacd failed");
 			return -1;
 		}
+		lpBuf = data_buffer + 12;
 		OutputMainChannel(fpSector, lpBuf, "Track_List_2", nLBA, DISC_SECTOR_SIZE);
 
 		Track_List_2 tList2;
@@ -695,12 +717,18 @@ int ReadSACDFileSystem(
 		}
 
 		nLBA = ulChToc[c] + 3;
-		bytesRead = read(fd, lpBuf, DISC_SECTOR_SIZE);
-		if (bytesRead == -1) {
-			perror("Read failed (ISRC_and_Genre_List)");
+		ioctl_buf.param2   = 0;
+		ioctl_buf.param1   = nLBA;
+		ioctl_buf.count    = 1;
+		ioctl_buf.user_ptr = (unsigned int)data_buffer;
+
+		if (read_sacd(fdsacd, &ioctl_buf) < 0) {
+			perror("read_sacd failed");
+			free(data_buffer);
 			return -1;
 		}
-		OutputMainChannel(fpSector, lpBuf, "ISRC_and_Genre_List", nLBA, DISC_SECTOR_SIZE * 2);
+		lpBuf = data_buffer + 12;
+		OutputMainChannel(fpSector, lpBuf, "ISRC_and_Genre_List", nLBA, DISC_SECTOR_SIZE);
 
 		fprintf(fpLog,
 			"ISRC_and_Genre_List\n"
@@ -715,19 +743,22 @@ int ReadSACDFileSystem(
 		}
 
 		if (aToc.Access_List_Ptr) {
-			nLBA = ulChToc[c] + aToc.Access_List_Ptr;
-			fdofs = (off64_t)nLBA * (off64_t)DISC_SECTOR_SIZE;
-			result = lseek64(fd, fdofs, SEEK_SET);
-			if (result == -1) {
-				perror("lseek failed (Access_List)");
-				return -1;
+			unsigned char* data_buffer2 = (unsigned char*)malloc(DISC_RAW_SECTOR_SIZE * 2);
+			for (int i = 0; i < 32; i++) {
+				ioctl_buf.param2   = 0;
+				ioctl_buf.param1   = ulChToc[c] + aToc.Access_List_Ptr + i;
+				ioctl_buf.count    = 1;
+				ioctl_buf.user_ptr = (unsigned int)data_buffer2;
+
+				if (read_sacd(fdsacd, &ioctl_buf) < 0) {
+					perror("read_sacd failed");
+					return -1;
+				}
+				memcpy(data_buffer + DISC_SECTOR_SIZE * i, data_buffer2 + 12, DISC_SECTOR_SIZE);
 			}
-			bytesRead = read(fd, lpBuf, DISC_SECTOR_SIZE * 32);
-			if (bytesRead == -1) {
-				perror("Read failed (Access_List)");
-				return -1;
-			}
-			OutputMainChannel(fpSector, lpBuf, "Access_List", nLBA, DISC_SECTOR_SIZE * 32);
+			free(data_buffer2);
+			lpBuf = data_buffer;
+			OutputMainChannel(fpSector, lpBuf, "Access_List", ulChToc[c] + aToc.Access_List_Ptr, DISC_SECTOR_SIZE * 32);
 
 			Access_List alist;
 			memcpy(&alist, lpBuf, sizeof(Access_List));
@@ -780,17 +811,17 @@ int ReadSACDFileSystem(
 
 		if (aToc.Track_Text_Ptr) {
 			nLBA = ulChToc[c] + aToc.Track_Text_Ptr;
-			fdofs = (off64_t)nLBA * (off64_t)DISC_SECTOR_SIZE;
-			result = lseek64(fd, fdofs, SEEK_SET);
-			if (result == -1) {
-				perror("lseek failed (Track_Text)");
+			ioctl_buf.param2   = 0;
+			ioctl_buf.param1   = nLBA;
+			ioctl_buf.count    = 1;
+			ioctl_buf.user_ptr = (unsigned int)data_buffer;
+
+			if (read_sacd(fdsacd, &ioctl_buf) < 0) {
+				perror("read_sacd failed");
+				free(data_buffer);
 				return -1;
 			}
-			bytesRead = read(fd, lpBuf, DISC_SECTOR_SIZE);
-			if (bytesRead == -1) {
-				perror("Read failed (Track_Text)");
-				return -1;
-			}
+			lpBuf = data_buffer + 12;
 			OutputMainChannel(fpSector, lpBuf, "Track_Text", nLBA, DISC_SECTOR_SIZE);
 
 			Track_Text TTxt;
@@ -816,17 +847,17 @@ int ReadSACDFileSystem(
 					if (TTxt.Track_Text_Item_Ptr[h][i]) {
 						nLBA = ulChToc[c] + aToc.Track_Text_Ptr + (TTxt.Track_Text_Item_Ptr[h][i] / DISC_SECTOR_SIZE);
 						if (nLBAbak < nLBA) {
-							fdofs = (off64_t)nLBA * (off64_t)DISC_SECTOR_SIZE;
-							result = lseek64(fd, fdofs, SEEK_SET);
-							if (result == -1) {
-								perror("lseek failed (Title)");
-								return 1;
+							ioctl_buf.param2   = 0;
+							ioctl_buf.param1   = nLBA;
+							ioctl_buf.count    = 1;
+							ioctl_buf.user_ptr = (unsigned int)data_buffer;
+
+							if (read_sacd(fdsacd, &ioctl_buf) < 0) {
+								perror("read_sacd failed");
+								free(data_buffer);
+								return -1;
 							}
-							bytesRead = read(fd, lpBuf, DISC_SECTOR_SIZE);
-							if (bytesRead == -1) {
-								perror("Read failed (Title)");
-								return 1;
-							}
+							lpBuf = data_buffer + 12;
 							OutputMainChannel(fpSector, lpBuf, "Title", nLBA, DISC_SECTOR_SIZE);
 						}
 						fprintf(fpLog, "\t     Number_of_Item[%d][%02d]: %02d, "
@@ -835,27 +866,22 @@ int ReadSACDFileSystem(
 						case 1:
 							fprintf(fpLog, "Title[%d][%02d]: %s\n"
 								, h + 1, i + 1, &lpBuf[nOfs + 6]);
-						fflush(fpLog);
 							break;
 						case 2:
 							fprintf(fpLog, "Performer[%d][%02d]: %s\n"
 								, h + 1, i + 1, &lpBuf[nOfs + 6]);
-						fflush(fpLog);
 							break;
 						case 3:
 							fprintf(fpLog, "Songwriter[%d][%02d]: %s\n"
 								, h + 1, i + 1, &lpBuf[nOfs + 6]);
-						fflush(fpLog);
 							break;
 						case 4:
 							fprintf(fpLog, "Composer[%d][%02d]: %s\n"
 								, h + 1, i + 1, &lpBuf[nOfs + 6]);
-						fflush(fpLog);
 							break;
 						case 5:
 							fprintf(fpLog, "Arranger[%d][%02d]: %s\n"
 								, h + 1, i + 1, &lpBuf[nOfs + 6]);
-						fflush(fpLog);
 							break;
 						case 6:
 							fprintf(fpLog, "Message[%d][%02d]: %s\n"
@@ -912,6 +938,6 @@ int ReadSACDFileSystem(
 			}
 		}
 	}
-	free(lpBuf);
+	free(data_buffer);
 	return 0;
 }
