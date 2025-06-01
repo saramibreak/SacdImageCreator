@@ -1,9 +1,9 @@
 #MTKAT 0.xx script
 CLI(CLI_drv.sacd.tray 1)
-CLI(CLI_exec sleep 10s)
 CLI(CLI_drv.ir.rx.sq 0xaf000)
 CLI(CLI_drv.ir.rx.sq 0x8f000)
-CLI(CLI_exec sleep 20s)
+CLI(CLI_exec sleep 10s)
+CLI(CLI_drv.sacd.tray 0)
 CLI(CLI_exec /bin/sh /mnt/sd*/AutoScript/autorip.sh)
 CLI(CLI_drv.sacd.tray 1)
 CLI(CLI_exec sleep 10s)

@@ -277,7 +277,7 @@ int ReadSACDFileSystem(
 	ioctl_buf.user_ptr = (unsigned int)data_buffer;
 
 	if (read_sacd(fdsacd, &ioctl_buf) < 0) {
-		perror("read_sacd failed");
+		perror("read_sacd failed (Master TOC)");
 		free(data_buffer);
 		return -1;
 	}
@@ -346,9 +346,11 @@ int ReadSACDFileSystem(
 		, mToc.Txt_Ch.Number_of_Text_Channels
 	);
 	memcpy(pToc[0].Disc_Catalog_Number, mToc.Disc_Catalog_Number, 16);
-	for (int i = 0; pToc[0].Disc_Catalog_Number[i] != '\0'; i++) {
-		if (pToc[0].Disc_Catalog_Number[i] == ' ') {
-			pToc[0].Disc_Catalog_Number[i] = '\0';
+	for (int i = 15; 0 < i; i--) {
+		if (pToc[0].Disc_Catalog_Number[i] != ' ') {
+			if (i < 15) {
+				pToc[0].Disc_Catalog_Number[i + 1] = '\0';
+			}
 			break;
 		}
 	}
@@ -374,7 +376,7 @@ int ReadSACDFileSystem(
 		ioctl_buf.user_ptr = (unsigned int)data_buffer;
 
 		if (read_sacd(fdsacd, &ioctl_buf) < 0) {
-			perror("read_sacd failed");
+			perror("read_sacd failed (Master_Text)");
 			free(data_buffer);
 			return -1;
 		}
@@ -506,7 +508,7 @@ int ReadSACDFileSystem(
 	ioctl_buf.user_ptr = (unsigned int)data_buffer;
 
 	if (read_sacd(fdsacd, &ioctl_buf) < 0) {
-		perror("read_sacd failed");
+		perror("read_sacd failed (Manufacture)");
 		free(data_buffer);
 		return -1;
 	}
@@ -525,7 +527,7 @@ int ReadSACDFileSystem(
 		ioctl_buf.user_ptr = (unsigned int)data_buffer;
 
 		if (read_sacd(fdsacd, &ioctl_buf) < 0) {
-			perror("read_sacd failed");
+			perror("read_sacd failed (Area_TOC)");
 			free(data_buffer);
 			return -1;
 		}
@@ -647,7 +649,7 @@ int ReadSACDFileSystem(
 		ioctl_buf.user_ptr = (unsigned int)data_buffer;
 
 		if (read_sacd(fdsacd, &ioctl_buf) < 0) {
-			perror("read_sacd failed");
+			perror("read_sacd failed (Track_List_1)");
 			free(data_buffer);
 			return -1;
 		}
@@ -687,7 +689,7 @@ int ReadSACDFileSystem(
 		ioctl_buf.user_ptr = (unsigned int)data_buffer;
 
 		if (read_sacd(fdsacd, &ioctl_buf) < 0) {
-			perror("read_sacd failed");
+			perror("read_sacd failed (Track_List_2)");
 			return -1;
 		}
 		lpBuf = data_buffer + 12;
@@ -723,7 +725,7 @@ int ReadSACDFileSystem(
 		ioctl_buf.user_ptr = (unsigned int)data_buffer;
 
 		if (read_sacd(fdsacd, &ioctl_buf) < 0) {
-			perror("read_sacd failed");
+			perror("read_sacd failed (ISRC_and_Genre_List)");
 			free(data_buffer);
 			return -1;
 		}
@@ -751,7 +753,7 @@ int ReadSACDFileSystem(
 				ioctl_buf.user_ptr = (unsigned int)data_buffer2;
 
 				if (read_sacd(fdsacd, &ioctl_buf) < 0) {
-					perror("read_sacd failed");
+					perror("read_sacd failed (Access_List)");
 					return -1;
 				}
 				memcpy(data_buffer + DISC_SECTOR_SIZE * i, data_buffer2 + 12, DISC_SECTOR_SIZE);
@@ -817,12 +819,12 @@ int ReadSACDFileSystem(
 			ioctl_buf.user_ptr = (unsigned int)data_buffer;
 
 			if (read_sacd(fdsacd, &ioctl_buf) < 0) {
-				perror("read_sacd failed");
+				perror("read_sacd failed (Track_Text)");
 				free(data_buffer);
 				return -1;
 			}
 			lpBuf = data_buffer + 12;
-			OutputMainChannel(fpSector, lpBuf, "Track_Text", nLBA, DISC_SECTOR_SIZE);
+			OutputMainChannel(fpSector, lpBuf, "Track_Text_Item_Ptr", nLBA, DISC_SECTOR_SIZE);
 
 			Track_Text TTxt;
 			fprintf(fpLog,
@@ -839,100 +841,114 @@ int ReadSACDFileSystem(
 					);
 				}
 			}
+			int track_text_size = TTxt.Track_Text_Item_Ptr[aToc.Txt_Ch.Number_of_Text_Channels - 1][aToc.Number_of_Track - 1] - TTxt.Track_Text_Item_Ptr[0][0];
+			int track_text_sector = track_text_size / DISC_SECTOR_SIZE;
+			if (track_text_size % DISC_SECTOR_SIZE) {
+				track_text_sector++;
+			}
 
-			int nLBAbak = 0;
+			unsigned char* data_buffer2 = (unsigned char*)malloc(DISC_RAW_SECTOR_SIZE * track_text_sector);
+			for (int i = 0; i < track_text_sector; i++) {
+				ioctl_buf.param2   = 0;
+				ioctl_buf.param1   = ulChToc[c] + aToc.Track_Text_Ptr + (TTxt.Track_Text_Item_Ptr[0][0] / DISC_SECTOR_SIZE) + i;
+				ioctl_buf.count    = 1;
+				ioctl_buf.user_ptr = (unsigned int)data_buffer2;
+
+				if (read_sacd(fdsacd, &ioctl_buf) < 0) {
+					perror("read_sacd failed");
+					return -1;
+				}
+				memcpy(data_buffer + DISC_SECTOR_SIZE * i, data_buffer2 + 12, DISC_SECTOR_SIZE);
+			}
+			free(data_buffer2);
+			lpBuf = data_buffer;
+			OutputMainChannel(fpSector, lpBuf, "Track_Text", nLBA, DISC_SECTOR_SIZE * track_text_sector);
+
 			for (int h = 0; h < aToc.Txt_Ch.Number_of_Text_Channels; h++) {
 				int nOfs = 0;
 				for (int i = 0; i < aToc.Number_of_Track; i++) {
 					if (TTxt.Track_Text_Item_Ptr[h][i]) {
-						nLBA = ulChToc[c] + aToc.Track_Text_Ptr + (TTxt.Track_Text_Item_Ptr[h][i] / DISC_SECTOR_SIZE);
-						if (nLBAbak < nLBA) {
-							ioctl_buf.param2   = 0;
-							ioctl_buf.param1   = nLBA;
-							ioctl_buf.count    = 1;
-							ioctl_buf.user_ptr = (unsigned int)data_buffer;
-
-							if (read_sacd(fdsacd, &ioctl_buf) < 0) {
-								perror("read_sacd failed");
-								free(data_buffer);
-								return -1;
-							}
-							lpBuf = data_buffer + 12;
-							OutputMainChannel(fpSector, lpBuf, "Title", nLBA, DISC_SECTOR_SIZE);
-						}
-						fprintf(fpLog, "\t     Number_of_Item[%d][%02d]: %02d, "
+						fprintf(fpLog, "\t     Number_of_Item[%d][%02d]: %02d\n"
 							, h + 1, i + 1, lpBuf[nOfs]);
-						switch (lpBuf[nOfs + 4]) {
-						case 1:
-							fprintf(fpLog, "Title[%d][%02d]: %s\n"
-								, h + 1, i + 1, &lpBuf[nOfs + 6]);
-							break;
-						case 2:
-							fprintf(fpLog, "Performer[%d][%02d]: %s\n"
-								, h + 1, i + 1, &lpBuf[nOfs + 6]);
-							break;
-						case 3:
-							fprintf(fpLog, "Songwriter[%d][%02d]: %s\n"
-								, h + 1, i + 1, &lpBuf[nOfs + 6]);
-							break;
-						case 4:
-							fprintf(fpLog, "Composer[%d][%02d]: %s\n"
-								, h + 1, i + 1, &lpBuf[nOfs + 6]);
-							break;
-						case 5:
-							fprintf(fpLog, "Arranger[%d][%02d]: %s\n"
-								, h + 1, i + 1, &lpBuf[nOfs + 6]);
-							break;
-						case 6:
-							fprintf(fpLog, "Message[%d][%02d]: %s\n"
-								, h + 1, i + 1, &lpBuf[nOfs + 6]);
-							break;
-						case 7:
-							fprintf(fpLog, "Extra Message[%d][%02d]: %s\n"
-								, h + 1, i + 1, &lpBuf[nOfs + 6]);
-							break;
-						case 8:
-							fprintf(fpLog, "Copyright[%d][%02d]: %s\n"
-								, h + 1, i + 1, &lpBuf[nOfs + 6]);
-							break;
-						case 129:
-							fprintf(fpLog, "Title, phonetic text[%d][%02d]: %s\n"
-								, h + 1, i + 1, &lpBuf[nOfs + 6]);
-							break;
-						case 130:
-							fprintf(fpLog, "Performer, phonetic text[%d][%02d]: %s\n"
-								, h + 1, i + 1, &lpBuf[nOfs + 6]);
-							break;
-						case 131:
-							fprintf(fpLog, "Songwriter, phonetic text[%d][%02d]: %s\n"
-								, h + 1, i + 1, &lpBuf[nOfs + 6]);
-							break;
-						case 132:
-							fprintf(fpLog, "Composer, phonetic text[%d][%02d]: %s\n"
-								, h + 1, i + 1, &lpBuf[nOfs + 6]);
-							break;
-						case 133:
-							fprintf(fpLog, "Arranger, phonetic text[%d][%02d]: %s\n"
-								, h + 1, i + 1, &lpBuf[nOfs + 6]);
-							break;
-						case 134:
-							fprintf(fpLog, "Message, phonetic text[%d][%02d]: %s\n"
-								, h + 1, i + 1, &lpBuf[nOfs + 6]);
-							break;
-						case 135:
-							fprintf(fpLog, "Extra Message, phonetic text[%d][%02d]: %s\n"
-								, h + 1, i + 1, &lpBuf[nOfs + 6]);
-							break;
-						case 136:
-							fprintf(fpLog, "Copyright, phonetic text[%d][%02d]: %s\n"
-								, h + 1, i + 1, &lpBuf[nOfs + 6]);
-							break;
-						default:
-							fprintf(fpLog, "Reserved\n");
-							break;
+						int n_item = lpBuf[nOfs];
+						nOfs += 4;
+						for (int j = 0; j < n_item; j++) {
+							switch (lpBuf[nOfs]) {
+							case 1:
+								fprintf(fpLog, "\t              Title[%d][%02d]: %s\n"
+									, h + 1, i + 1, &lpBuf[nOfs + 2]);
+								break;
+							case 2:
+								fprintf(fpLog, "\t          Performer[%d][%02d]: %s\n"
+									, h + 1, i + 1, &lpBuf[nOfs + 2]);
+								break;
+							case 3:
+								fprintf(fpLog, "\t         Songwriter[%d][%02d]: %s\n"
+									, h + 1, i + 1, &lpBuf[nOfs + 2]);
+								break;
+							case 4:
+								fprintf(fpLog, "\t           Composer[%d][%02d]: %s\n"
+									, h + 1, i + 1, &lpBuf[nOfs + 2]);
+								break;
+							case 5:
+								fprintf(fpLog, "\t           Arranger[%d][%02d]: %s\n"
+									, h + 1, i + 1, &lpBuf[nOfs + 2]);
+								break;
+							case 6:
+								fprintf(fpLog, "\t            Message[%d][%02d]: %s\n"
+									, h + 1, i + 1, &lpBuf[nOfs + 2]);
+								break;
+							case 7:
+								fprintf(fpLog, "\t      Extra Message[%d][%02d]: %s\n"
+									, h + 1, i + 1, &lpBuf[nOfs + 2]);
+								break;
+							case 8:
+								fprintf(fpLog, "\t          Copyright[%d][%02d]: %s\n"
+									, h + 1, i + 1, &lpBuf[nOfs + 2]);
+								break;
+							case 129:
+								fprintf(fpLog, "\t        Title, phonetic text[%d][%02d]: %s\n"
+									, h + 1, i + 1, &lpBuf[nOfs + 2]);
+								break;
+							case 130:
+								fprintf(fpLog, "\t    Performer, phonetic text[%d][%02d]: %s\n"
+									, h + 1, i + 1, &lpBuf[nOfs + 2]);
+								break;
+							case 131:
+								fprintf(fpLog, "\t   Songwriter, phonetic text[%d][%02d]: %s\n"
+									, h + 1, i + 1, &lpBuf[nOfs + 2]);
+								break;
+							case 132:
+								fprintf(fpLog, "\t     Composer, phonetic text[%d][%02d]: %s\n"
+									, h + 1, i + 1, &lpBuf[nOfs + 2]);
+								break;
+							case 133:
+								fprintf(fpLog, "\t     Arranger, phonetic text[%d][%02d]: %s\n"
+									, h + 1, i + 1, &lpBuf[nOfs + 2]);
+								break;
+							case 134:
+								fprintf(fpLog, "\t      Message, phonetic text[%d][%02d]: %s\n"
+									, h + 1, i + 1, &lpBuf[nOfs + 2]);
+								break;
+							case 135:
+								fprintf(fpLog, "\tExtra Message, phonetic text[%d][%02d]: %s\n"
+									, h + 1, i + 1, &lpBuf[nOfs + 2]);
+								break;
+							case 136:
+								fprintf(fpLog, "\t    Copyright, phonetic text[%d][%02d]: %s\n"
+									, h + 1, i + 1, &lpBuf[nOfs + 2]);
+								break;
+							default:
+								fprintf(fpLog, "Reserved\n");
+								break;
+							}
+							nOfs += 2;
+							nOfs += strlen((const char*)&lpBuf[nOfs]) + 1;
+							if (nOfs % 4) {
+								nOfs += 4 - nOfs % 4;
+							}
 						}
 						nOfs = TTxt.Track_Text_Item_Ptr[h][i + 1] - TTxt.Track_Text_Item_Ptr[h][0];
-						nLBAbak = nLBA;
 					}
 				}
 			}

@@ -1,0 +1,1 @@
+Linux BDP-93 2.6.27 #1 PREEMPT Fri Oct 10 16:04:02 CST 2014 armv6l unknown
